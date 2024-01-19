@@ -1,32 +1,38 @@
-#! /bin/bash
+#!/bin/bash
+PSQL="psql -X --username=freecodecamp --dbname=periodic_table --tuples-only -c"
 
-PSQL="psql --username=freecodecamp --dbname=periodic_table -t --tuples-only -c"
+MAIN_PROGRAM() {
+  if [[ -z $1 ]]
+  then
+    echo "Please provide an element as an argument."
+  else
+    PRINT_ELEMENT $1
+  fi
+}
 
-echo -e "\n\n~~~~ Periodic Table ~~~~\n\n"
+PRINT_ELEMENT() {
+  INPUT=$1
+  if [[ ! $INPUT =~ ^[0-9]+$ ]]
+  then
+    ATOMIC_NUMBER=$(echo $($PSQL "SELECT atomic_number FROM elements WHERE symbol='$INPUT' OR name='$INPUT';") | sed 's/ //g')
+  else
+    ATOMIC_NUMBER=$(echo $($PSQL "SELECT atomic_number FROM elements WHERE atomic_number=$INPUT;") | sed 's/ //g')
+  fi
+  
+  if [[ -z $ATOMIC_NUMBER ]]
+  then
+    echo "I could not find that element in the database."
+  else
+    TYPE_ID=$(echo $($PSQL "SELECT type_id FROM properties WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
+    NAME=$(echo $($PSQL "SELECT name FROM elements WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
+    SYMBOL=$(echo $($PSQL "SELECT symbol FROM elements WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
+    ATOMIC_MASS=$(echo $($PSQL "SELECT atomic_mass FROM properties WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
+    MELTING_POINT_CELSIUS=$(echo $($PSQL "SELECT melting_point_celsius FROM properties WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
+    BOILING_POINT_CELSIUS=$(echo $($PSQL "SELECT boiling_point_celsius FROM properties WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
+    TYPE=$(echo $($PSQL "SELECT type FROM elements LEFT JOIN properties USING(atomic_number) LEFT JOIN types USING(type_id) WHERE atomic_number=$ATOMIC_NUMBER;") | sed 's/ //g')
 
-if [[ -z $1 ]]
-then
-  echo -e "\nPlease provide an element as an argument."
-  exit
-fi
+    echo "The element with atomic number $ATOMIC_NUMBER is $NAME ($SYMBOL). It's a $TYPE, with a mass of $ATOMIC_MASS amu. $NAME has a melting point of $MELTING_POINT_CELSIUS celsius and a boiling point of $BOILING_POINT_CELSIUS celsius."
+  fi
+}
 
-#if argument is atomic number
-if [[ $1 =~ ^[1-9]+$ ]]
-then
-  element=$($PSQL "select atomic_number, name, symbol, type, atomic_mass, melting_point_celsius, boiling_point_celsius from elements join properties using(atomic_number) join types using(type_id) where atomic_number = '$1'")
-else
-#if argument is string
-  element=$($PSQL "select atomic_number, name, symbol, type, atomic_mass, melting_point_celsius, boiling_point_celsius from elements join properties using(atomic_number) join types using(type_id) where name = '$1' or symbol = '$1'")
-fi
-
-#element not in db
-if [[ -z $element ]]
-then
-  echo -e "\nI could not find that element in the database."
-  exit
-fi
-
-echo $element | while IFS=" |" read an name symbol type mass mp bp 
-do
-  echo -e "\nThe element with atomic number $an is $name ($symbol). It's a $type, with a mass of $mass amu. $name has a melting point of $mp celsius and a boiling point of $bp celsius."
-done
+MAIN_PROGRAM $1
